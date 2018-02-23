@@ -1,4 +1,4 @@
 @echo off
 git add --a
-git commit -m "commitment_unavailable"
+git commit -m "commit_info_unavailable"
 git push
