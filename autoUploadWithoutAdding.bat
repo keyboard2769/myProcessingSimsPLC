@@ -1,3 +1,3 @@
 @echo off
-git commit -m "unchecked"
+git commit -m "commitment_unavailable"
 git push
