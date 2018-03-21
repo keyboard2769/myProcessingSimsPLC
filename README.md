@@ -5,17 +5,16 @@
 
 # Here is my plan about this stuff
 
-## I have these pde projects
+## pde projects
 
-- blink example
-- toggle button exsample
-- trolley example
-- water tower exsample
+- [C01]blink example
+- [C02]trolley example
 
-## I will have some bigger nb projects
+## nb projects
 
-- blink exsample with my ui arrangement
-- toggle button exsample with my ui arrangement
-- trolley exsample with my ui arrangement
-- water tower exsample with my swing arrangement
-- filler auto weighing system with my swing arrangement
+- [C03]blink exsample with my ui arrangement
+- [C04]toggle button exsample with my ui arrangement
+- [done][C05]trolley exsample with my ui arrangement
+- [C06]water tower exsample with my swing arrangement
+- [C07]filler auto weighing system with my swing arrangement
+
