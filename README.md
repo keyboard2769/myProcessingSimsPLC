@@ -1,14 +1,21 @@
-# i dont think this will be helpful to anybody.
+# I dont think this will be helpful to anybody.
+
 > here again
-> i have a full tutorial on some website.
+> i have a full vedio tutorial on some website
 
-# here is my plan about this stuff
+# Here is my plan about this stuff
 
-## i have these pde projects
+## I have these pde projects
+
 - blink example
-- button example
+- toggle button exsample
 - trolley example
+- water tower exsample
 
-## i will have some bigger nb projects
-- water tower
-- filler auto weighing system
+## I will have some bigger nb projects
+
+- blink exsample with my ui arrangement
+- toggle button exsample with my ui arrangement
+- trolley exsample with my ui arrangement
+- water tower exsample with my swing arrangement
+- filler auto weighing system with my swing arrangement
