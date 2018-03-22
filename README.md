@@ -12,8 +12,8 @@
 
 ## nb projects
 
-- [C03]blink exsample with my ui arrangement
-- [C04]toggle button exsample with my ui arrangement
+- [done][C03]blink exsample with my ui arrangement
+- [done][C04]toggle button exsample with my ui arrangement
 - [done][C05]trolley exsample with my ui arrangement
 - [C06]water tower exsample with my swing arrangement
 - [C07]filler auto weighing system with my swing arrangement
