@@ -16,7 +16,7 @@
 - [done][C03]blink exsample with my ui arrangement
 - [done][C04]toggle button exsample with my ui arrangement
 - [done][C05]trolley exsample with my ui arrangement
-- [C06]water tower exsample with my swing arrangement
+- [done][C06]water tower exsample with my swing arrangement
 - [C07]filler auto weighing system with my swing arrangement
 
 ## further demostration projects on mixture plan
