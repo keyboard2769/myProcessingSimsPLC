@@ -28,4 +28,5 @@
 ## further non-stand-alone projects
 
 - [E01]a memory viewer tool based on TCP/IP connection for fuji-sx typed controller
+- [E??]!"$%&'(
 - [E??]??
