@@ -1,10 +1,10 @@
-# I dont think this will be helpful to anybody.
+# i dont think this will be helpful to anybody.
 
 > but hey
 > i had a full vedio tutorial on some website
 > and i wrote some shitty gitty tutorial
 
-# Here will be my plan about this stuff
+# here will be my plan about this stuff
 
 ## pde exsample projects
 
