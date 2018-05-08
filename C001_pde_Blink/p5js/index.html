@@ -9,14 +9,14 @@ function setup() {
   createCanvas(320, 240);
   frameRate(16);
   
-}//+++
+}
 
 function draw() { 
 
   pbRoller++;pbRoller&=0x0F;
-  background(bRoller<7?127:255); 
+  background(pbRoller<7?127:255); 
   
-}//+++
+}
 
 </script>
 </head><body></body>
