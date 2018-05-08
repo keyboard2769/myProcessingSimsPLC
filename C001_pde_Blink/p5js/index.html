@@ -1,0 +1,23 @@
+<html><head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.6.1/p5.js"></script>
+<script >
+
+var pbRoller=0
+
+function setup() { 
+
+  createCanvas(320, 240);
+  frameRate(16);
+  
+}//+++
+
+function draw() { 
+
+  pbRoller++;pbRoller&=0x0F;
+  background(bRoller<7?127:255); 
+  
+}//+++
+
+</script>
+</head><body></body>
+</html>
