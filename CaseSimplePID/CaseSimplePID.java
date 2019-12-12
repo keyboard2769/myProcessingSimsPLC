@@ -347,6 +347,14 @@ public class CaseSimplePID extends PApplet{
     background(0);
     pbRoller++;pbRoller&=0x0f;
     
+    //-- actual ** scan
+    //[head]::now what??
+    
+    //-- actual ** simulate
+    
+    //-- bind
+    
+    
     //-- local ui
     //-- local ui ** burner
     ccDrawAsLabel(mnBurnerDegreeClosePL);
@@ -365,7 +373,10 @@ public class CaseSimplePID extends PApplet{
     
     //-- updating
     fill(0xFF);
-    text(nf(pbRoller,2),5,5);
+    text(String.format(
+      "[r:%02d]|[m:(%03d,%03d)]|[f:%.2f]",
+      pbRoller,mouseX,mouseY,frameRate
+    ),5,5);
     
   }//++~
 
