@@ -19,6 +19,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.Arrays;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -58,7 +59,7 @@ public class CaseSimplePID extends PApplet{
   //-- swing ** operation ** cooling
   static final JTextField        O_OPRT_MVL_TB = new JTextField("000.0");
   static final JComboBox<String> O_OPRT_MVR_NT = new JComboBox<>(new String[]{
-    "AUTO","DISAB","FORCE"
+    "DISAB","AUTO","FORCE"
   });
   
   //-- swing ** temperature controller
@@ -80,8 +81,9 @@ public class CaseSimplePID extends PApplet{
   static volatile boolean mnCoolingDamperAutoFLG  = false;
   static volatile boolean mnCoolingDamperForceFLG = false;
   
-  static volatile float mnFluxAdjustWidth = 20.0f;
-  static volatile float mnFluxTPH         = 0.0f;
+  static volatile float mnFluxAdjustWidth     =  20.0f;
+  static volatile float mnFluxTPH             =   0.0f;
+  static volatile float mnCooldownTemperature = 200.0f;
   
   //=== action
   
@@ -104,7 +106,7 @@ public class CaseSimplePID extends PApplet{
       //-- cooling mode
       if(lpSouce.equals(O_OPRT_MVR_NT)){
         int lpIndex = O_OPRT_MVR_NT.getSelectedIndex();
-        mnCoolingDamperAutoFLG  = (lpIndex == 0);
+        mnCoolingDamperAutoFLG  = (lpIndex == 1);
         mnCoolingDamperForceFLG = (lpIndex == 2);
       }else//..?
         
@@ -142,7 +144,7 @@ public class CaseSimplePID extends PApplet{
         mnFluxTPH = PApplet.constrain(mnFluxTPH, 0f, 320f);
       }else//..?
       
-      //-- unhanled
+      //-- unhandled
       {System.err.println(
         "O_MOMENTARY_LISTENER::unhandled:"+lpSource.toString()
       );}//..?
@@ -166,10 +168,20 @@ public class CaseSimplePID extends PApplet{
         );
         float lpParsed = ccToFloat(lpInput);
         mnFluxAdjustWidth = PApplet.constrain(lpParsed, 1f, 50f);
-        O_OPRT_FXX_TB.setText(Float.toString(mnFluxAdjustWidth));
+        O_OPRT_FXX_TB.setText(String.format("%03.1f", mnFluxAdjustWidth));
+      }else//..?
+        
+      //-- cooldown celcius
+      if(lpSource.equals(O_OPRT_MVL_TB)){
+        String lpInput = ccGetStringByInputBox(
+          "[1 ~ 999]", O_OPRT_MVL_TB.getText()
+        );
+        float lpParsed = ccToFloat(lpInput);
+        mnCooldownTemperature = PApplet.constrain(lpParsed, 1f, 999f);
+        O_OPRT_MVL_TB.setText(String.format("%03.1f", mnCooldownTemperature));
       }else//..?
       
-      //-- unhanled
+      //-- unhandled
       {System.err.println(
         "O_INPUT_BOX_LISTENER::unhandled:"+lpSource.toString()
       );}//..?
@@ -283,6 +295,7 @@ public class CaseSimplePID extends PApplet{
       
       //-- post
       O_OPRT_FXX_TB.setText(String.format("%03.1f", mnFluxAdjustWidth));
+      O_OPRT_MVL_TB.setText(String.format("%03.1f", mnCooldownTemperature));
       
     }//+++
   };//***
@@ -336,7 +349,7 @@ public class CaseSimplePID extends PApplet{
     float lpRes;
     try{
       lpRes = Float.parseFloat(pxText);
-    }catch(NumberFormatException nfe) {
+    }catch(Exception e) {
       lpRes = 0.0f;
     }//..?
     return lpRes;
@@ -370,6 +383,11 @@ public class CaseSimplePID extends PApplet{
   EcElement pbDryerDegreeTB   = new EcElement();
   EcElement pbDryerFluxTB     = new EcElement();
   EcElement pbCoolingDamperPL = new EcElement(" ");
+  
+  //-- emulated
+  ZcFlicker fbSamplingClockTimer = new ZcFlicker(/*later*/16);
+  ZcFlicker fbAdjustClockTimer   = new ZcFlicker(/*later*/16);
+  ZcController fbTemperatureCTRL = new ZcController();
   
   //-- simulated
   boolean dcBurnerCloseMV     = false;
@@ -459,6 +477,13 @@ public class CaseSimplePID extends PApplet{
     pbRoller++;pbRoller&=0x0f;
     
     //-- emulated ** scan
+    //-- emulated ** scan ** controller
+    
+    //[head]::now waht?
+    
+    //-- emulated ** scan ** flag
+    
+    //-- emulated ** scan ** output
     dcBurnerCloseMV = gate(
       mnBurnerAutoFLG, /*later*/false,
       mnBurnerManualFLG, mnBurnerManualCloseFLG
@@ -469,10 +494,10 @@ public class CaseSimplePID extends PApplet{
     );
     dcBurnerOnFire = mnBurnerFireFLG;
     dcCoolingDamperMV = sel(
-      mnCoolingDamperAutoFLG,/*later*/false,mnCoolingDamperForceFLG
+      mnCoolingDamperAutoFLG,
+      (simDryerTemperature.cmVal>mnCooldownTemperature),
+      mnCoolingDamperForceFLG
     );
-    
-    //[head]::now what??
     
     //-- emulated ** simulate ** device
     dcColdAggregateLS = (mnFluxTPH>20.0f);
@@ -483,6 +508,9 @@ public class CaseSimplePID extends PApplet{
       (simBurnerDamper.ccToProportion()+0.02f)*C_TEMP_BURN_MAX,
       C_TEMP_INWD_CON
     );
+    if((pbRoller==7) && (random(1f)<0.33f)){
+      simAtomsphereTemperature.cmVal=C_TEMP_ATOM_CON*random(0.75f,1.25f);
+    }//..?
     ccTransfer(simBurnerTemperature, simDryerTemperature, C_TR_SLOW);
     ccTransfer(simDryerTemperature,simAtomsphereTemperature,
       sel(dcCoolingDamperMV, C_TR_FAST, C_TR_SLOW)
@@ -490,7 +518,7 @@ public class CaseSimplePID extends PApplet{
     ccTransfer(simAggregateTemperature, simAtomsphereTemperature, C_TR_SLOW);
     ccTransfer(
       simDryerTemperature, simAggregateTemperature,
-      sel(dcColdAggregateLS, map(mnFluxTPH,360f,1f,C_TR_SLOW,C_TR_FAST), 0f)
+      sel(dcColdAggregateLS, map(mnFluxTPH,360f,1f,C_TR_FAST,C_TR_SLOW)/2f, 0f)
     );
     
     //-- bind
@@ -543,6 +571,18 @@ public class CaseSimplePID extends PApplet{
   
   //=== utility
   
+  static final boolean not(boolean a){
+    return !a;
+  }//+++
+  
+  static final boolean and(boolean a, boolean b){
+    return a&&b;
+  }//+++
+  
+  static final boolean or(boolean a, boolean b){
+    return a||b;
+  }//+++
+  
   static final boolean sel(boolean c, boolean a, boolean b){
     return c?a:b;
   }//+++
@@ -555,18 +595,13 @@ public class CaseSimplePID extends PApplet{
     return ca?a:(cb?b:false);
   }//+++
   
-  void ssPover(){
-    
-    //-- default
-    println(this.getClass().getName()+"::call_exit");
-    exit();
-    
-  }//+++
-  
-  boolean ssIsValidString(String pxLine){
+  boolean ccIsValidString(String pxLine){
     if(pxLine==null){return false;}
     return !pxLine.isEmpty();
   }//+++
+  
+  //[todo]::float ccToSecond(int pxFrameCount)
+  //[todo]::int ccToFrameCount(float pxSecond)
   
   void ccSurroundText(String pxText, int pxX, int pxY){
     if(pxText==null){return;}
@@ -722,22 +757,22 @@ public class CaseSimplePID extends PApplet{
     );
   }//+++
   
-  //[todo]::void ccDrawAsLine(ZcController pxTarget){}//+++
+  //[todo]::void ccDrawAsGraph(ZcController pxTarget){}//+++
   
   //=== real
   
   class ZcReal{
     float cmVal;
     boolean cmStatical;
-    public ZcReal(){
+    ZcReal(){
       cmVal=0.0f;
       cmStatical=false;  
     }//++!
-    public ZcReal(float pxInitValue){
+    ZcReal(float pxInitValue){
       cmVal=pxInitValue;
       cmStatical=false;  
     }//++!
-    public ZcReal(float pxInitValue, boolean pxStatical){
+    ZcReal(float pxInitValue, boolean pxStatical){
       cmVal=pxInitValue;
       cmStatical=pxStatical;  
     }//++!
@@ -752,6 +787,25 @@ public class CaseSimplePID extends PApplet{
   }//+++
   
   //=== controller
+  
+  class ZcFlicker{
+    int cmVal;
+    int cmJudge, cmMax;
+    ZcFlicker(int pxJudge, int pxMax){ccSetTimer(pxJudge, pxMax);}//++!
+    ZcFlicker(int pxMax){ccSetTimer(pxMax, pxMax);}//++!
+    void ccRun(){cmVal++;if(cmVal>cmMax){cmVal=0;}}//++~
+    synchronized final void ccSetTimer(int pxJudge, int pxMax){
+      cmVal=0;
+      if(pxMax<3){
+        cmJudge=cmMax=3;
+      }else{
+        cmMax=pxMax;
+        cmJudge=constrain(pxJudge, 0, pxMax);
+      }//..?
+    }//++<
+    boolean ccIsAt(int pxCount){return cmVal==pxCount;}//++>
+    boolean ccIsAbove(int pxCount){return cmVal>=pxCount;}//++>
+  }//***
   
   class ZcDamper{
     int cmAD=500;
@@ -771,25 +825,173 @@ public class CaseSimplePID extends PApplet{
   }//***
   
   class ZcController{
-    float[] cmDesProcessHistory;
-    float cmProcessValue,cmProcessMinimum,cmProcessMaximum;
-    float cmTarget,cmShiftedTarget;
-    float cmDeadPositive, cmDeadNegative;
-    float cmProportionPositive, cmProportionNegative;
-    float cmSamplingDead,cmAdjustWidth;
+    
+    boolean cmHistoryAllFilled=false;
+    int cmHistoryHead=0;
+    float[] cmDesProcessHistory=new float[]{0,0,0,0, 0,0,0,0};
+    float cmProcessAverage = 0f;
+    float[] cmDesGradientHistory=new float[]{0,0,0,0, 0,0,0,0};
+    float cmGradientAverage = 0f;
+    float cmProcessValue=0f,cmRangeMinimum=0f,cmRangeMaximum=400f;
+    float cmSamplingDead=1f,cmAdjustWidth=1f;
+    float cmTarget=0f,cmShiftedTarget=0f;
+    float cmDead=0.20f,cmDeadPositive=0f, cmDeadNegative=0f;
+    float cmProportion=0.70f,cmProportionPositive=0f, cmProportionNegative=0f;
     float cmAnalogOutput;
-    //--
-    void ccRun(){}
-    //--
-    void ccSetDead(){}
-    void ccSetProportion(){}
-    //--
-    void ccSetProcessValue(){}
-    void ccSetTargetValue(){}
-    //--
-    float ccGetAnalogoutput(){return 0f;}
-    boolean ccGetPositiveOutput(){return false;}
-    boolean ccGetNegativeOutput(){return false;}
+    
+    //-- ** **
+    
+    void ccRun(float pxProcessVAL, boolean pxSamplingCLK, boolean pxAdjustCLK){
+      
+      //-- output
+      if(cmProcessAverage > cmDeadPositive){
+        cmAnalogOutput = -1f * map(
+          cmProcessAverage-cmDeadPositive,
+          0f,cmProportionPositive-cmDeadPositive,
+          0.001f,0.999f
+        );
+      }else
+      if(cmProcessAverage < cmDeadNegative){
+        cmAnalogOutput = 1f * map(
+          cmProcessAverage-cmProportionNegative,
+          0f,cmDeadPositive-cmProportionNegative,
+          0.001f,0.999f
+        );
+      }else{
+        cmAnalogOutput = 0f;
+      }//..?
+      
+      //-- sampling / adjusting
+      if(pxSamplingCLK){
+        ccOfferProcessValue(pxProcessVAL);
+        if(pxAdjustCLK){
+          if(cmHistoryAllFilled && (cmGradientAverage>cmSamplingDead)){
+            ccAdjustTarget();
+            ccCalculateDeadRange();
+            ccCalculateProportionRange();
+          }//..?
+        }//..?
+      }//..?
+      
+    }//++~
+    
+    //-- ** **
+    
+    void ccOfferProcessValue(float pxValue){
+      
+      //-- offering
+      int lpLogicalPrev = (cmHistoryHead-1)&0x07;
+      cmDesProcessHistory[cmHistoryHead]=pxValue;
+      cmDesGradientHistory[cmHistoryHead]=
+        cmDesProcessHistory[cmHistoryHead]
+          - cmDesProcessHistory[lpLogicalPrev];
+      cmHistoryHead++;cmHistoryHead&=0x07;
+      
+      //-- fulfilling
+      if(cmHistoryHead==7){cmHistoryAllFilled=true;}
+      
+      //-- average calculation
+      if(cmHistoryAllFilled){
+        cmProcessAverage  = cmDesProcessHistory[ cmHistoryHead];
+        cmGradientAverage = cmDesGradientHistory[cmHistoryHead];
+      }else{
+        
+        //-- ** provess
+        cmProcessAverage = 0f;
+        for(int i=0;i<8;i++){cmProcessAverage += cmDesProcessHistory[i];}
+        cmProcessAverage/=8f;
+        
+        //-- ** gradient
+        cmGradientAverage = 0f;
+        for(int i=0;i<8;i++){cmGradientAverage += cmDesGradientHistory[i];}
+        cmGradientAverage/=8f;
+        
+      }//..?
+      
+    }//+++
+    
+    void ccAdjustTarget(){
+      if(ccGetPositiveOutput()){cmShiftedTarget+=cmAdjustWidth;}
+      if(ccGetNegativeOutput()){cmShiftedTarget-=cmAdjustWidth;}
+    }//+++
+    
+    void ccCalculateDeadRange(){
+      cmDeadPositive = cmShiftedTarget
+        + (cmRangeMaximum-cmRangeMinimum)*cmDead;
+      cmDeadPositive = cmShiftedTarget
+        - (cmRangeMaximum-cmRangeMinimum)*cmDead;
+    }//+++
+    
+    void ccCalculateProportionRange(){
+      cmProportionPositive = cmShiftedTarget
+        + (cmRangeMaximum-cmRangeMinimum)*cmProportion;
+      cmProportionNegative = cmShiftedTarget
+        - (cmRangeMaximum-cmRangeMinimum)*cmProportion;
+    }//+++
+    
+    //-- ** **
+    
+    synchronized void ccSetDead(float pxDead){
+      cmDead = constrain(pxDead, 0.01f, 0.99f);
+      ccCalculateDeadRange();
+      cmSamplingDead=cmAdjustWidth
+        = (cmDeadPositive-cmDeadNegative);//..work around
+    }//++<
+    
+    synchronized void ccSetProportion(float pxProportion){
+      cmDead = constrain(pxProportion, 0.01f, 0.99f);
+      ccCalculateDeadRange();
+    }//++<
+    
+    synchronized void ccSetTargetValue(float pxValue){
+      cmTarget=constrain(pxValue, cmRangeMinimum, cmRangeMaximum);
+      cmShiftedTarget=cmTarget;
+      ccResetHistory();
+    }//++<
+    
+    synchronized void ccResetHistory(){
+      cmHistoryAllFilled=false;
+      cmHistoryHead=0;
+      cmProcessAverage=0f;
+      Arrays.fill(cmDesProcessHistory, 0f);
+      cmGradientAverage=0f;
+      Arrays.fill(cmDesGradientHistory, 0f);
+    }//++<
+    
+    //-- ** **
+    
+    float ccGetAnalogOutput(){
+      return constrain(cmAnalogOutput, -1f, 1f);
+    }//++>
+    
+    boolean ccGetPositiveOutput(){
+      return ccGetAnalogOutput() > 0f;
+    }//++>
+    
+    boolean ccGetNegativeOutput(){
+      return ccGetAnalogOutput() < 0f;
+    }//++>
+    
+    //-- ** **
+    
+    String ccToInicator(String pxTitle){
+      StringBuilder lpRes = new StringBuilder(pxTitle);
+      lpRes.append(':');lpRes.append('\n');
+      lpRes.append(String.format("[at:%3.1f][st%3.1f]\n",
+        cmTarget, cmShiftedTarget
+      ));
+      lpRes.append(String.format("[d:(%3.1f,%3.1f)]\n",
+        cmDeadNegative, cmDeadPositive
+      ));
+      lpRes.append(String.format("[p:(%3.1f,%3.1f)]\n",
+        cmProportionNegative, cmProportionPositive
+      ));
+      lpRes.append(String.format("[avp:%3.1f][avg:%3.3f]\n",
+        cmProcessAverage, cmGradientAverage
+      ));
+      return lpRes.toString();
+    }//++>
+    
   }//***
 
   //=== entry
