@@ -17,6 +17,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -68,29 +70,110 @@ public class CaseSimplePID extends PApplet{
   
   //-- swing ** degree controller
   
+  //=== pipe
+  
+  static volatile boolean mnBurnerManualCloseFLG  = false;
+  static volatile boolean mnBurnerManualOpenFLG   = false;
+  static volatile boolean mnBurnerAutoFLG         = false;
+  static volatile boolean mnBurnerManualFLG       = false;
+  static volatile boolean mnBurnerFireFLG         = false;
+  static volatile boolean mnCoolingDamperAutoFLG  = false;
+  static volatile boolean mnCoolingDamperForceFLG = false;
+  
+  static volatile float mnFluxAdjustWidth = 20.0f;
+  static volatile float mnFluxTPH         = 0.0f;
+  
   //=== action
   
   static final ActionListener O_NOTCH_LISTENER = new ActionListener() {
     @Override public void actionPerformed(ActionEvent ae) {
       Object lpSouce = ae.getSource();
-      System.err.println(".actionPerformed():not_yet:"+lpSouce.toString());
+      
+      //-- burner mode
+      if(lpSouce.equals(O_OPRT_BMD_NT)){
+        int lpIndex = O_OPRT_BMD_NT.getSelectedIndex();
+        mnBurnerAutoFLG   = (lpIndex == 0);
+        mnBurnerManualFLG = (lpIndex == 2);
+      }else//..?
+        
+      //-- fire set
+      if(lpSouce.equals(O_OPRT_BFC_SW)){
+        mnBurnerFireFLG=O_OPRT_BFC_SW.isSelected();
+      }else//..?
+      
+      //-- cooling mode
+      if(lpSouce.equals(O_OPRT_MVR_NT)){
+        int lpIndex = O_OPRT_MVR_NT.getSelectedIndex();
+        mnCoolingDamperAutoFLG  = (lpIndex == 0);
+        mnCoolingDamperForceFLG = (lpIndex == 2);
+      }else//..?
+        
+      //-- unhandled
+      {System.err.println(
+        "O_NOTCH_LISTENER::unhandled:"+lpSouce.toString()
+      );}//..?
+      
     }//+++
   };//***
   
   static final MouseAdapter O_MOMENTARY_LISTENER = new MouseAdapter() {
     @Override public void mousePressed(MouseEvent me) {
-      System.err.println(".mousePressed():not_yet");
+      Object lpSource = me.getSource();
+      
+      //-- degree close 
+      if(lpSource.equals(O_OPRT_BUC_SW)){
+        mnBurnerManualCloseFLG=true;
+      }else//..?
+      
+      //-- degree open
+      if(lpSource.equals(O_OPRT_BUO_SW)){
+        mnBurnerManualOpenFLG=true;
+      }else//..?
+      
+      //-- flux decrement
+      if(lpSource.equals(O_OPRT_FDD_SW)){
+        mnFluxTPH -= mnFluxAdjustWidth;
+        mnFluxTPH = PApplet.constrain(mnFluxTPH, 0f, 320f);
+      }else//..?
+      
+      //-- flux increment
+      if(lpSource.equals(O_OPRT_FPP_SW)){
+        mnFluxTPH += mnFluxAdjustWidth;
+        mnFluxTPH = PApplet.constrain(mnFluxTPH, 0f, 320f);
+      }else//..?
+      
+      //-- unhanled
+      {System.err.println(
+        "O_MOMENTARY_LISTENER::unhandled:"+lpSource.toString()
+      );}//..?
+      
     }//+++
     @Override public void mouseReleased(MouseEvent me) {
-      System.err.println(".mouseReleased()::not_yet");
+      //-- anyway
+      mnBurnerManualCloseFLG=false;
+      mnBurnerManualOpenFLG=false;
     }//+++
   };//***
   
   static final MouseAdapter O_INPUT_BOX_LISTENER = new MouseAdapter() {
     @Override public void mouseReleased(MouseEvent me) {
       Object lpSource = me.getSource();
-      String lpD = ccGetStringByInputBox("??", "000");
-      System.err.println(lpSource.toString()+":not_yet:"+lpD);
+      
+      //-- flux width
+      if(lpSource.equals(O_OPRT_FXX_TB)){
+        String lpInput = ccGetStringByInputBox(
+          "[1 ~ 50]", O_OPRT_FXX_TB.getText()
+        );
+        float lpParsed = ccToFloat(lpInput);
+        mnFluxAdjustWidth = PApplet.constrain(lpParsed, 1f, 50f);
+        O_OPRT_FXX_TB.setText(Float.toString(mnFluxAdjustWidth));
+      }else//..?
+      
+      //-- unhanled
+      {System.err.println(
+        "O_INPUT_BOX_LISTENER::unhandled:"+lpSource.toString()
+      );}//..?
+      
     }//+++
   };//***
   
@@ -198,6 +281,9 @@ public class CaseSimplePID extends PApplet{
       O_FRAME.pack();
       O_FRAME.setVisible(true);
       
+      //-- post
+      O_OPRT_FXX_TB.setText(String.format("%03.1f", mnFluxAdjustWidth));
+      
     }//+++
   };//***
   
@@ -245,46 +331,67 @@ public class CaseSimplePID extends PApplet{
       pxBrief, pxDefault
     );
   }//+++
+  
+  static final float ccToFloat(String pxText){
+    float lpRes;
+    try{
+      lpRes = Float.parseFloat(pxText);
+    }catch(NumberFormatException nfe) {
+      lpRes = 0.0f;
+    }//..?
+    return lpRes;
+  }//+++
 
   //=== overridden
   
+  //-- constant
+  static final float C_TEMP_BURN_MAX = 800.0f;
+  static final float C_TEMP_ATOM_CON =  27.5f;
+  static final float C_TEMP_INWD_CON =  23.5f;
+  static final float C_TR_SLOW = 256f;
+  static final float C_TR_FAST =  64f;
+  
   //-- system
   int pbRoller = 0;
+  private WindowAdapter cmSkechClosing = new WindowAdapter() {
+    @Override public void windowClosing(WindowEvent we) {
+      System.out.println(self.getClass().getName()+"::call_exit");
+      self.exit();
+    }//+++
+  };//***
   
   //-- local ui
-  EcElement mnBurnerICON          = new EcElement();
-  EcElement mnBurnerDegreeClosePL = new EcElement("-");
-  EcElement mnBurnerDegreeTB      = new EcElement();
-  EcElement mnBurnerDegreeOpenPL  = new EcElement("+");
-  EcElement mnBurnerFirePL    = new EcElement(" ");
-  EcElement mnDryerICON       = new EcElement();
-  EcElement mnDryerDegreeTB   = new EcElement();
-  EcElement mnDryerFluxTB     = new EcElement();
-  EcElement mnCoolingDamperPL = new EcElement(" ");
-  
-  //-- operated
-  static volatile boolean mnBurnerManualCloseFLG = false;
-  static volatile boolean mnBurnerManualOpenFLG  = false;
-  static volatile boolean mnBurnerAutoFLG        = false;
-  static volatile boolean mnBurnerManualFLG      = false;
-  static volatile boolean mnBurnerFireFLG        = false;
+  EcElement pbBurnerICON      = new EcElement();
+  EcElement pbBurnerClosePL   = new EcElement("-");
+  EcElement pbBurnerDegreeTB  = new EcElement();
+  EcElement pbBurnerOpenPL    = new EcElement("+");
+  EcElement pbBurnerFirePL    = new EcElement(" ");
+  EcElement pbDryerICON       = new EcElement();
+  EcElement pbDryerDegreeTB   = new EcElement();
+  EcElement pbDryerFluxTB     = new EcElement();
+  EcElement pbCoolingDamperPL = new EcElement(" ");
   
   //-- simulated
   boolean dcBurnerCloseMV     = false;
   boolean dcBurnerOpenMV      = false;
   boolean dcBurnerOnFire      = false;
   boolean dcCoolingDamperMV   = false;
+  boolean dcColdAggregateLS   = false;
   float   dcDryerFlux         = 160.0f;
-  ZcReal dcDryerTemperature = new ZcReal(27.0f);
-  ZcReal dcAirTemperature   = new ZcReal(27.0f,true);
+  ZcDamper simBurnerDamper        = new ZcDamper();
+  ZcReal simBurnerTemperature     = new ZcReal(C_TEMP_INWD_CON,true);
+  ZcReal simDryerTemperature      = new ZcReal(C_TEMP_INWD_CON);
+  ZcReal simAtomsphereTemperature = new ZcReal(C_TEMP_ATOM_CON,true);
+  ZcReal simAggregateTemperature  = new ZcReal(C_TEMP_INWD_CON/2f);
   
   @Override public void setup() {
     
     //-- pre setting
     size(320,240);
     noSmooth();
-    frame.setTitle(CaseSimplePID.class.getName());
     self=this;
+    frame.setTitle(CaseSimplePID.class.getName());
+    frame.addWindowListener(cmSkechClosing);
     
     //-- replace setting
     frameRate(16);noStroke();textAlign(LEFT, TOP);ellipseMode(CENTER);
@@ -295,49 +402,53 @@ public class CaseSimplePID extends PApplet{
     //-- local ui ** burner
     lpPotentialW = 48;
     lpPotentialH = 18;
-    mnBurnerDegreeClosePL.cmRegion.setBounds(5,25,lpPotentialH,lpPotentialH);
-    mnBurnerDegreeTB.cmOffColor=0xFFCCCCCC;
-    mnBurnerDegreeTB.cmRegion.setSize(lpPotentialW, lpPotentialH);
-    mnBurnerDegreeTB.ccFollowH(mnBurnerDegreeClosePL, 2);
-    mnBurnerDegreeOpenPL.cmRegion.setSize(lpPotentialH, lpPotentialH);
-    mnBurnerDegreeOpenPL.ccFollowH(mnBurnerDegreeTB, 2);
+    pbBurnerClosePL.cmRegion.setBounds(5,25,lpPotentialH,lpPotentialH);
+    pbBurnerDegreeTB.cmOffColor=0xFFCCCCCC;
+    pbBurnerDegreeTB.cmRegion.setSize(lpPotentialW, lpPotentialH);
+    pbBurnerDegreeTB.ccFollowH(pbBurnerClosePL, 2);
+    pbBurnerOpenPL.cmRegion.setSize(lpPotentialH, lpPotentialH);
+    pbBurnerOpenPL.ccFollowH(pbBurnerDegreeTB, 2);
     lpPotentialW =
-      ccGetEndX(mnBurnerDegreeOpenPL.cmRegion)
-       - mnBurnerDegreeClosePL.cmRegion.x;
+      ccGetEndX(pbBurnerOpenPL.cmRegion)
+       - pbBurnerClosePL.cmRegion.x;
     lpPotentialH = 
       lpPotentialW *2 /3;
-    mnBurnerICON.cmRegion.setSize(lpPotentialW, lpPotentialH);
-    mnBurnerICON.ccFollowV(mnBurnerDegreeClosePL, 2);
-    mnBurnerFirePL.cmRegion.setLocation(ccGetEndX(mnBurnerICON.cmRegion) -mnBurnerFirePL.cmRegion.width -2,
-      ccGetCenterY(mnBurnerICON.cmRegion) -mnBurnerFirePL.cmRegion.height -2
+    pbBurnerICON.cmRegion.setSize(lpPotentialW, lpPotentialH);
+    pbBurnerICON.ccFollowV(pbBurnerClosePL, 2);
+    pbBurnerFirePL.cmOnColor = 0xFFEECC99;
+    pbBurnerFirePL.cmRegion.setLocation(
+      ccGetEndX(pbBurnerICON.cmRegion) -pbBurnerFirePL.cmRegion.width -2,
+      ccGetCenterY(pbBurnerICON.cmRegion) -pbBurnerFirePL.cmRegion.height -2
     );
     
     //-- local ui ** dryer
     lpPotentialH = lpPotentialW;
     lpPotentialW = lpPotentialH*2;
-    mnDryerICON.cmRegion.setSize(lpPotentialW, lpPotentialH);
-    mnDryerICON.ccFollowE(mnBurnerICON, 5);
-    mnDryerICON.cmRegion.y -= mnBurnerICON.cmRegion.height/4;
+    pbDryerICON.cmRegion.setSize(lpPotentialW, lpPotentialH);
+    pbDryerICON.ccFollowE(pbBurnerICON, 5);
+    pbDryerICON.cmRegion.y -= pbBurnerICON.cmRegion.height/4;
     lpPotentialW = 54;
     lpPotentialH = 22;
-    mnDryerDegreeTB.cmOffColor=0xFFEECCCC;
-    mnDryerDegreeTB.cmRegion.setBounds(ccGetCenterX(mnDryerICON.cmRegion),
-      ccGetCenterY(mnDryerICON.cmRegion),
+    pbDryerDegreeTB.cmOffColor=0xFFEECCCC;
+    pbDryerDegreeTB.cmRegion.setBounds(ccGetCenterX(pbDryerICON.cmRegion),
+      ccGetCenterY(pbDryerICON.cmRegion),
       lpPotentialW, lpPotentialH
     );
     lpPotentialW = 60;
     lpPotentialH = 22;
-    mnDryerFluxTB.cmOffColor=0xFFEEEECC;
-    mnDryerFluxTB.cmRegion.setSize(lpPotentialW, lpPotentialH);
-    mnDryerFluxTB.ccFollowH(mnDryerDegreeTB, 10);
-    mnCoolingDamperPL.cmRegion.setLocation(
-      mnDryerICON.cmRegion.x+mnDryerICON.cmRegion.width*5/6+8,
-      mnDryerICON.cmRegion.y+2
+    pbDryerFluxTB.cmOffColor =0xFF999999;
+    pbDryerFluxTB.cmOnColor  =0xFFEEEECC;
+    pbDryerFluxTB.cmRegion.setSize(lpPotentialW, lpPotentialH);
+    pbDryerFluxTB.ccFollowH(pbDryerDegreeTB, 10);
+    pbCoolingDamperPL.cmOnColor = 0xFF99CCEE;
+    pbCoolingDamperPL.cmRegion.setLocation(
+      pbDryerICON.cmRegion.x+pbDryerICON.cmRegion.width*5/6+8,
+      pbDryerICON.cmRegion.y+2
     );
     
     //-- post setting
     SwingUtilities.invokeLater(O_SWING_INIT);
-    println("-- setup over");
+    println(this.getClass().getName()+"::setup_end");
     
   }//++!
 
@@ -347,32 +458,66 @@ public class CaseSimplePID extends PApplet{
     background(0);
     pbRoller++;pbRoller&=0x0f;
     
-    //-- actual ** scan
+    //-- emulated ** scan
+    dcBurnerCloseMV = gate(
+      mnBurnerAutoFLG, /*later*/false,
+      mnBurnerManualFLG, mnBurnerManualCloseFLG
+    );
+    dcBurnerOpenMV = gate(
+      mnBurnerAutoFLG, /*later*/false,
+      mnBurnerManualFLG, mnBurnerManualOpenFLG
+    );
+    dcBurnerOnFire = mnBurnerFireFLG;
+    dcCoolingDamperMV = sel(
+      mnCoolingDamperAutoFLG,/*later*/false,mnCoolingDamperForceFLG
+    );
+    
     //[head]::now what??
     
-    //-- actual ** simulate
+    //-- emulated ** simulate ** device
+    dcColdAggregateLS = (mnFluxTPH>20.0f);
+    simBurnerDamper.ccClose(dcBurnerCloseMV);
+    simBurnerDamper.ccOpen(dcBurnerOpenMV);
+    //-- emulated ** simulate ** real
+    simBurnerTemperature.cmVal=sel(dcBurnerOnFire,
+      (simBurnerDamper.ccToProportion()+0.02f)*C_TEMP_BURN_MAX,
+      C_TEMP_INWD_CON
+    );
+    ccTransfer(simBurnerTemperature, simDryerTemperature, C_TR_SLOW);
+    ccTransfer(simDryerTemperature,simAtomsphereTemperature,
+      sel(dcCoolingDamperMV, C_TR_FAST, C_TR_SLOW)
+    );
+    ccTransfer(simAggregateTemperature, simAtomsphereTemperature, C_TR_SLOW);
+    ccTransfer(
+      simDryerTemperature, simAggregateTemperature,
+      sel(dcColdAggregateLS, map(mnFluxTPH,360f,1f,C_TR_SLOW,C_TR_FAST), 0f)
+    );
     
     //-- bind
-    
+    pbBurnerClosePL.cmActivated=dcBurnerCloseMV;
+    pbBurnerOpenPL.cmActivated=dcBurnerOpenMV;
+    pbBurnerFirePL.cmActivated=dcBurnerOnFire&&(pbRoller%6>4);
+    pbCoolingDamperPL.cmActivated=dcCoolingDamperMV;
+    pbDryerFluxTB.cmActivated=dcColdAggregateLS;
     
     //-- local ui
     //-- local ui ** burner
-    ccDrawAsLabel(mnBurnerDegreeClosePL);
-    ccDrawAsValueBox(mnBurnerDegreeTB, mouseX, "%");
-    ccDrawAsLabel(mnBurnerDegreeOpenPL);
-    ccDrawAsBlower(mnBurnerICON);
-    ccDrawAsLabel(mnBurnerFirePL);
+    ccDrawAsLabel(pbBurnerClosePL);
+    ccDrawAsValueBox(pbBurnerDegreeTB, simBurnerDamper.ccToPercentage(), "%");
+    ccDrawAsLabel(pbBurnerOpenPL);
+    ccDrawAsBlower(pbBurnerICON);
+    ccDrawAsLabel(pbBurnerFirePL);
     //-- local ui ** burner
-    ccDrawAsDryer(mnDryerICON);
-    ccDrawAsValueBox(mnDryerDegreeTB, mouseY, "`C");
-    ccDrawAsValueBox(mnDryerFluxTB, mouseY, "tph");
-    ccDrawAsLabel(mnCoolingDamperPL);
+    ccDrawAsDryer(pbDryerICON);
+    ccDrawAsValueBox(pbDryerDegreeTB, ceil(simDryerTemperature.cmVal), "`C");
+    ccDrawAsValueBox(pbDryerFluxTB, ceil(mnFluxTPH), "tph");
+    ccDrawAsLabel(pbCoolingDamperPL);
     //-- local ui ** controller
     ccSurroundText("TPCTRL\n..this is a dummy\nnot_yet!!",   5, 125);
     ccSurroundText("BDCTRL\n..this is a dummy\nnot_yet!!", 165, 125);
     
-    //-- updating
-    fill(0xFF);
+    //-- watch
+    fill(0xFF66CC66);
     text(String.format(
       "[r:%02d]|[m:(%03d,%03d)]|[f:%.2f]",
       pbRoller,mouseX,mouseY,frameRate
@@ -382,43 +527,40 @@ public class CaseSimplePID extends PApplet{
 
   @Override public void keyPressed() {
     switch(key){
-      
-      //-- direction
-      case 'w':break;
-      case 's':break;
-      case 'a':break;
-      case 'd':break;
-      
-      //-- confirm
-      case 'r':break;
-      case 'f':break;
-      case 'j':break;
-      case 'k':break;
-      
-      //-- defult
-      case 'q':ssPover();break;
+      case java.awt.event.KeyEvent.VK_ESCAPE:
+      case 'q':cmSkechClosing.windowClosing(null);break;
       default:break;
-      
     }//..?
   }//+++
 
   @Override public void mousePressed() {
     switch (mouseButton) {
       case LEFT:return;
-      case RIGHT:
-        SwingUtilities.invokeLater(O_SWING_FLIP);
-      break;
+      case RIGHT:SwingUtilities.invokeLater(O_SWING_FLIP);break;
       default:break; //+++
     }//..?
   }//+++
   
   //=== utility
   
+  static final boolean sel(boolean c, boolean a, boolean b){
+    return c?a:b;
+  }//+++
+  
+  static final float sel(boolean c, float a, float b){
+    return c?a:b;
+  }//+++
+  
+  static final boolean gate(boolean ca, boolean a, boolean cb, boolean b){
+    return ca?a:(cb?b:false);
+  }//+++
+  
   void ssPover(){
     
     //-- default
-    println("--exit <- ");
+    println(this.getClass().getName()+"::call_exit");
     exit();
+    
   }//+++
   
   boolean ssIsValidString(String pxLine){
@@ -467,7 +609,7 @@ public class CaseSimplePID extends PApplet{
   class EcElement{
     Rectangle cmRegion=new Rectangle(8, 8, 8, 8);
     String cmText="<text>";
-    boolean cmActivity=false;
+    boolean cmActivated=false;
     int cmOnColor    = 0xFFEEEE33;
     int cmOffColor   = 0xFF555555;
     int cmFrontColor = 0xFF333333;
@@ -480,7 +622,7 @@ public class CaseSimplePID extends PApplet{
     }//++!
     public EcElement(String pxText, boolean pxAct){
       this(pxText);
-      cmActivity=pxAct;
+      cmActivated=pxAct;
     }//++!
     //===
     void ccFollowH(EcElement pxTarget, int pxOffset){
@@ -504,7 +646,7 @@ public class CaseSimplePID extends PApplet{
   void ccDrawAsLabel(EcElement pxTarget){
     pushStyle();
     {
-      fill(pxTarget.cmActivity?pxTarget.cmOnColor:pxTarget.cmOffColor);
+      fill(pxTarget.cmActivated?pxTarget.cmOnColor:pxTarget.cmOffColor);
       rect(
         pxTarget.cmRegion.x, pxTarget.cmRegion.y,
         pxTarget.cmRegion.width, pxTarget.cmRegion.height
@@ -601,14 +743,32 @@ public class CaseSimplePID extends PApplet{
     }//++!
   }//***
   
-  void ccTransfer(ZcReal pxPotentialP, ZcReal pxPotentialN, int pxRatio){
+  void ccTransfer(ZcReal pxPotentialP, ZcReal pxPotentialN, float pxRatio){
+    if(pxRatio<=0f){return;}
     float lpDiff=pxPotentialP.cmVal-pxPotentialN.cmVal;
     lpDiff/=pxRatio;
-    if(!pxPotentialP.cmStatical){pxPotentialP.cmVal+=lpDiff;}
-    if(!pxPotentialN.cmStatical){pxPotentialN.cmVal-=lpDiff;}
+    if(!pxPotentialP.cmStatical){pxPotentialP.cmVal-=lpDiff;}
+    if(!pxPotentialN.cmStatical){pxPotentialN.cmVal+=lpDiff;}
   }//+++
   
   //=== controller
+  
+  class ZcDamper{
+    int cmAD=500;
+    int cmSpeed=16;
+    void ccOpen(boolean pxCond){
+      if(!pxCond){return;}
+      cmAD+=cmSpeed;ccLimit();
+    }//+++
+    void ccClose(boolean pxCond){
+      if(!pxCond){return;}
+      cmAD-=cmSpeed;ccLimit();
+    }//+++
+    void ccLimit(){cmAD=constrain(cmAD, 400, 3600);}//+++
+    float ccToProportion(){return map((float)cmAD,400f,3600f,0f,1f);}//+++
+    int ccToPercentage(){return ceil(map(cmAD,400,3600,0,100));}//+++
+    int ccGetAD(){return cmAD;}//+++
+  }//***
   
   class ZcController{
     float[] cmDesProcessHistory;
