@@ -227,6 +227,7 @@ public class CaseSimplePID extends PApplet{
         );if(lpInput==null){return;}
         float lpParsed = ccToFloat(lpInput);
         mnCTRLSamplingSEC = PApplet.constrain(lpParsed, 0.01f, 59.99f);
+        //[head]:: fill this !!
         System.err.println("O_INPUT_BOX_LISTENER::O_TEMP_SAMP_TB $ not yet");
         O_TEMP_SAMP_TB.setText(String.format("%.2f", mnCTRLSamplingSEC));
       }else//..?
@@ -451,8 +452,8 @@ public class CaseSimplePID extends PApplet{
   EcElement pbCoolingDamperPL = new EcElement(" ");
   
   //-- emulated
-  ZcFlicker fbSamplingClockTimer = new ZcFlicker(/*later*/16);
-  ZcFlicker fbAdjustClockTimer   = new ZcFlicker(/*later*/16);
+  ZcFlicker fbSamplingClockTimer = new ZcFlicker(/*later*/8);
+  ZcFlicker fbAdjustClockTimer   = new ZcFlicker(/*later*/48);
   ZcController fbTemperatureCTRL = new ZcController();
   
   //-- simulated
@@ -607,21 +608,25 @@ public class CaseSimplePID extends PApplet{
     pbCoolingDamperPL.cmActivated=dcCoolingDamperMV;
     pbDryerFluxTB.cmActivated=dcColdAggregateLS;
     
-    //-- local ui
-    //-- local ui ** line inicator
+    //-- local ui ** passive
+    ccDrawAsBlower(pbBurnerICON);
+    ccDrawAsDryer(pbDryerICON);
+    
+    //-- local ui ** line-inicator
     ccDrawController(fbTemperatureCTRL);
-    //-- local ui ** burner
+    ccDrawAsLabel(pbBurnerFirePL);
+    ccDrawAsLabel(pbCoolingDamperPL);
+    
+    //-- local ui ** active ** burner
     ccDrawAsLabel(pbBurnerClosePL);
     ccDrawAsValueBox(pbBurnerDegreeTB, simBurnerDamper.ccToPercentage(), "%");
     ccDrawAsLabel(pbBurnerOpenPL);
-    ccDrawAsBlower(pbBurnerICON);
-    ccDrawAsLabel(pbBurnerFirePL);
-    //-- local ui ** burner
-    ccDrawAsDryer(pbDryerICON);
+    
+    //-- local ui ** active ** burner
     ccDrawAsValueBox(pbDryerDegreeTB, ceil(simDryerTemperature.cmVal), "`C");
     ccDrawAsValueBox(pbDryerFluxTB, ceil(mnFluxTPH), "tph");
-    ccDrawAsLabel(pbCoolingDamperPL);
-    //-- local ui ** controller
+    
+    //-- local ui ** active ** controller
     ccSurroundText(fbTemperatureCTRL.ccToInicator("T-C"), 5, 125);
     ccSurroundText("BDCTRL\n..this is a dummy\nnot_yet!!", 165, 125);
     
@@ -681,8 +686,14 @@ public class CaseSimplePID extends PApplet{
     return !pxLine.isEmpty();
   }//+++
   
-  //[todo]::float ccToSecond(int pxFrameCount)
-  //[todo]::int ccToFrameCount(float pxSecond)
+  float ccToSecond(int pxFrameCount){
+    float lpAmplified = ((float)pxFrameCount)*100f/16f;
+    int lpCeiled = ceil(lpAmplified);return ((float)(lpCeiled))/100f;
+  }//+++
+  
+  int ccToFrameCount(float pxSecond){
+    return (int)(pxSecond*16f);
+  }//+++
   
   void ccSurroundText(String pxText, int pxX, int pxY){
     if(pxText==null){return;}
@@ -719,34 +730,27 @@ public class CaseSimplePID extends PApplet{
     final int lpPropH  = ceil(
       pxTarget.cmProportionPositive - pxTarget.cmProportionNegative
     );
-    text(
-      String.format(
-        "(%02d,%02d)",
-        pxTarget.cmSamplingIndication,pxTarget.cmAdjustIndication
-      ),
-      mouseX,mouseY
-    );
     
     //-- proportion
-    stroke(0xFF33EE33);
-    fill((32+pxTarget.cmAdjustIndication*2)&0xFF);
+    stroke(0xAA339933);
+    fill((32+pxTarget.cmAdjustIndication*4)&0xFF,0x66);
     rect(
       lpConstG *1, lpConstY - lpPropH/2,
       width - lpConstG*2, lpPropH
     );
     
     //-- dead
-    stroke(0xFF22DD22);
-    fill((32+pxTarget.cmSamplingIndication*2)&0xFF);
+    stroke(0xAA228822);
+    fill((32+pxTarget.cmSamplingIndication*4)&0xFF,0x66);
     rect(
       lpConstG *2, lpConstY - lpDeadH/2,
       width - lpConstG*4, lpDeadH
     );
     
     //-- center / target
-    stroke(0xFF44FF44);
+    stroke(0xAA33EE33);
     ccDrawLineH(lpConstY);
-    stroke(0xFFCC9966);
+    stroke(0xAAEEEE33);
     ccDrawLineH(height-ceil(pxTarget.cmProcessAverage));
     
     //-- popping
@@ -978,22 +982,7 @@ public class CaseSimplePID extends PApplet{
     void ccRun(float pxProcessVAL, boolean pxSamplingCLK, boolean pxAdjustCLK){
       
       //-- output
-      if(cmProcessAverage > cmDeadPositive){
-        cmAnalogOutput = -1f * map(
-          cmProcessAverage-cmDeadPositive,
-          0f,cmProportionPositive-cmDeadPositive,
-          0.001f,0.999f
-        );
-      }else
-      if(cmProcessAverage < cmDeadNegative){
-        cmAnalogOutput = 1f * map(
-          cmProcessAverage-cmProportionNegative,
-          0f,cmDeadPositive-cmProportionNegative,
-          0.001f,0.999f
-        );
-      }else{
-        cmAnalogOutput = 0f;
-      }//..?
+      cmAnalogOutput = ccCalculateOutput();
       
       //-- sampling
       if(pxSamplingCLK){
@@ -1017,6 +1006,31 @@ public class CaseSimplePID extends PApplet{
     }//++~
     
     //-- ** **
+    
+    float ccCalculateOutput(){
+      if(cmProcessAverage < cmProportionNegative){
+        return 1f;
+      }else
+      if(cmProcessAverage > cmProportionPositive){
+        return -1f;
+      }else
+      if(cmProcessAverage > cmDeadPositive){
+        return -1f * map(
+          cmProcessAverage-cmDeadPositive,
+          0f,cmProportionPositive-cmDeadPositive,
+          0.001f,0.999f
+        );
+      }else
+      if(cmProcessAverage < cmDeadNegative){
+        return map(
+          cmProcessAverage-cmProportionNegative,
+          cmDeadNegative-cmProportionNegative,0f,
+          0.001f,0.999f
+        );
+      }else{
+        return 0f;
+      }//..?
+    }//+++
     
     void ccOfferProcessValue(float pxValue){
       
@@ -1052,8 +1066,8 @@ public class CaseSimplePID extends PApplet{
     }//+++
     
     void ccAdjustTarget(){
-      if(ccGetPositiveOutput()){cmShiftedTarget-=cmAdjustWidth;}
-      if(ccGetNegativeOutput()){cmShiftedTarget+=cmAdjustWidth;}
+      if(cmProcessAverage<cmTarget){cmShiftedTarget+=cmAdjustWidth;}
+      if(cmProcessAverage>cmTarget){cmShiftedTarget-=cmAdjustWidth;}
       cmShiftedTarget=constrain
         (cmShiftedTarget, cmRangeMinimum, cmRangeMaximum);
     }//+++
@@ -1106,7 +1120,7 @@ public class CaseSimplePID extends PApplet{
     //-- ** **
     
     float ccGetAnalogOutput(){
-      return constrain(cmAnalogOutput, -1f, 1f);
+      return cmAnalogOutput;
     }//++>
     
     boolean ccGetPositiveOutput(){
