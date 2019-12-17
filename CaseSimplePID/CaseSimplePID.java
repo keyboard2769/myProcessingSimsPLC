@@ -608,6 +608,8 @@ public class CaseSimplePID extends PApplet{
     pbDryerFluxTB.cmActivated=dcColdAggregateLS;
     
     //-- local ui
+    //-- local ui ** line inicator
+    ccDrawController(fbTemperatureCTRL);
     //-- local ui ** burner
     ccDrawAsLabel(pbBurnerClosePL);
     ccDrawAsValueBox(pbBurnerDegreeTB, simBurnerDamper.ccToPercentage(), "%");
@@ -700,6 +702,56 @@ public class CaseSimplePID extends PApplet{
       text(pxText, pxX+lpMargin, pxY+lpMargin);
     }
     popStyle();
+  }//+++
+  
+  void ccDrawLineH(int pxY){
+    line(0,pxY,width,pxY);
+  }//+++
+  
+  void ccDrawController(ZcController pxTarget){
+    
+    //-- pushing
+    final int lpConstG = 5;
+    final int lpConstY = height-ceil(pxTarget.cmShiftedTarget);
+    final int lpDeadH  = ceil(
+      pxTarget.cmDeadPositive - pxTarget.cmDeadNegative
+    );
+    final int lpPropH  = ceil(
+      pxTarget.cmProportionPositive - pxTarget.cmProportionNegative
+    );
+    text(
+      String.format(
+        "(%02d,%02d)",
+        pxTarget.cmSamplingIndication,pxTarget.cmAdjustIndication
+      ),
+      mouseX,mouseY
+    );
+    
+    //-- proportion
+    stroke(0xFF33EE33);
+    fill((32+pxTarget.cmAdjustIndication*2)&0xFF);
+    rect(
+      lpConstG *1, lpConstY - lpPropH/2,
+      width - lpConstG*2, lpPropH
+    );
+    
+    //-- dead
+    stroke(0xFF22DD22);
+    fill((32+pxTarget.cmSamplingIndication*2)&0xFF);
+    rect(
+      lpConstG *2, lpConstY - lpDeadH/2,
+      width - lpConstG*4, lpDeadH
+    );
+    
+    //-- center / target
+    stroke(0xFF44FF44);
+    ccDrawLineH(lpConstY);
+    stroke(0xFFCC9966);
+    ccDrawLineH(height-ceil(pxTarget.cmProcessAverage));
+    
+    //-- popping
+    noStroke();
+    
   }//+++
   
   //=== local ui
@@ -836,8 +888,6 @@ public class CaseSimplePID extends PApplet{
     );
   }//+++
   
-  //[todo]::void ccDrawAsGraph(ZcController pxTarget){}//+++
-  
   //=== real
   
   class ZcReal{
@@ -913,12 +963,15 @@ public class CaseSimplePID extends PApplet{
     float cmProcessAverage = 0f;
     float[] cmDesGradientHistory=new float[]{0,0,0,0, 0,0,0,0};
     float cmGradientAverage = 0f;
-    float cmProcessValue=0f,cmRangeMinimum=0f,cmRangeMaximum=400f;
-    float cmSamplingDead=1f,cmAdjustWidth=1f;
+    float cmProcessValue=0f,cmRangeMinimum=1f,cmRangeMaximum=239f;
+    float cmSamplingDead=5f,cmAdjustWidth=1f;
     float cmTarget=0f,cmShiftedTarget=0f;
     float cmDead=0.20f,cmDeadPositive=0f, cmDeadNegative=0f;
     float cmProportion=0.70f,cmProportionPositive=0f, cmProportionNegative=0f;
     float cmAnalogOutput=0.0f;
+    
+    int cmSamplingIndication = 16;
+    int cmAdjustIndication = 16;
     
     //-- ** **
     
@@ -942,20 +995,24 @@ public class CaseSimplePID extends PApplet{
         cmAnalogOutput = 0f;
       }//..?
       
-      //-- sampling / adjusting
-      
-      //[head]:: this is not working!!
-      
+      //-- sampling
       if(pxSamplingCLK){
         ccOfferProcessValue(pxProcessVAL);
-        if(pxAdjustCLK){
-          if(cmHistoryAllFilled && (cmGradientAverage>cmSamplingDead)){
-            ccAdjustTarget();
-            ccCalculateDeadRange();
-            ccCalculateProportionRange();
-          }//..?
-        }//..?
+        cmSamplingIndication=16;
       }//..?
+      if(cmSamplingIndication>0){cmSamplingIndication--;}
+      
+      //--  adjusting
+      boolean lpHistoryCondition = cmHistoryAllFilled
+        && (cmGradientAverage<=cmSamplingDead);
+      boolean lpProcessCondition = (cmAnalogOutput != 0f);
+      if(pxAdjustCLK && lpHistoryCondition && lpProcessCondition){
+          ccAdjustTarget();
+          ccCalculateDeadRange();
+          ccCalculateProportionRange();
+          cmAdjustIndication=16;
+      }//..?
+      if(cmAdjustIndication>0){cmAdjustIndication--;}
       
     }//++~
     
@@ -995,8 +1052,10 @@ public class CaseSimplePID extends PApplet{
     }//+++
     
     void ccAdjustTarget(){
-      if(ccGetPositiveOutput()){cmShiftedTarget+=cmAdjustWidth;}
-      if(ccGetNegativeOutput()){cmShiftedTarget-=cmAdjustWidth;}
+      if(ccGetPositiveOutput()){cmShiftedTarget-=cmAdjustWidth;}
+      if(ccGetNegativeOutput()){cmShiftedTarget+=cmAdjustWidth;}
+      cmShiftedTarget=constrain
+        (cmShiftedTarget, cmRangeMinimum, cmRangeMaximum);
     }//+++
     
     void ccCalculateDeadRange(){
