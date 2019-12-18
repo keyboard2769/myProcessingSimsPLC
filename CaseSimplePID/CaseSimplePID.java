@@ -60,21 +60,37 @@ public class CaseSimplePID extends PApplet{
   
   //-- swing ** info message
   static final String[] C_DES_MESSAGE = new String[]{
-    //[head]:: fill this!
-    "uno\n",
-    "dos\n",
-    "tre!\n"
+    "## basic usage: \n",
+    " 1) turn on the fire.\n",
+    " 2) tweek on some flux.\n",
+    " 3) watch.\n",
+    "## for tweeks : \n",
+    " - lower proportion value for uglier chattering.\n",
+    " - higher dead value for dumber controlling.\n",
+    " - slower sampling for rougher calculating.\n",
+    " - fast adjusting for jumpier result.\n",
+    " - let the cooling damper help you with a wild setting.\n",
+    "## the graph : \n",
+    " - the yellow one is the inner process average.\n",
+    " - the centered green one is the inner shifted target.\n",
+    " - the narrower square is suppsed to be the dead range.\n",
+    "   (depends on your setting).\n",
+    "   it blinks when a sampling is performed.\n",
+    " - the wider square is suppsed to be the proportion range.\n",
+    "   (depends on your setting).\n",
+    "   it blinks when a adjusting is performed.\n",
+    " \n",
+    "have fun!\n"
   };
   
   //-- swing ** top
-  static final JFrame O_FRAME = new JFrame(CaseSimplePID.class.getName());
+  static final JFrame O_FRAME = new JFrame();
   
   //-- swing ** operation ** combust
   static final JToggleButton     O_OPRT_BFC_SW = new JToggleButton("FIRE");
   static final JButton           O_OPRT_BUC_SW = new JButton("-");
   static final JButton           O_OPRT_BUO_SW = new JButton("+");
   static final JComboBox<String> O_OPRT_BMD_NT = new JComboBox<>(new String[]{
-    //[head]:: rotate this!
     "AUTO","DISAB","MANUAL"
   });
   
@@ -86,14 +102,13 @@ public class CaseSimplePID extends PApplet{
   //-- swing ** operation ** cooling
   static final JTextField        O_OPRT_MVL_TB = new JTextField("000.0");
   static final JComboBox<String> O_OPRT_MVR_NT = new JComboBox<>(new String[]{
-    //[head]:: rotate this!
     "DISAB","AUTO","FORCE"
   });
   
   //-- swing ** temperature controller
   static final JTextField O_TEMP_TARGET_TB = new JTextField("000.0");
   static final JTextField O_TEMP_DEAD_TB   = new JTextField("000.0");
-  static final JTextField O_TEMP_PORT_TB   = new JTextField("000.0");
+  static final JTextField O_TEMP_PROP_TB   = new JTextField("000.0");
   static final JTextField O_TEMP_SAMP_TB   = new JTextField("000.0");
   static final JTextField O_TEMP_ADJT_TB   = new JTextField("000.0");
   
@@ -239,14 +254,14 @@ public class CaseSimplePID extends PApplet{
       }else//..?
         
       //-- temperature ** proportion
-      if(lpSource.equals(O_TEMP_PORT_TB)){
+      if(lpSource.equals(O_TEMP_PROP_TB)){
         String lpInput = ccGetStringByInputBox(
-          "[0.01 ~ 0.99]", O_TEMP_PORT_TB.getText()
+          "[0.01 ~ 0.99]", O_TEMP_PROP_TB.getText()
         );if(lpInput==null){return;}
         float lpParsed = ccToFloat(lpInput);
         mnCTRLProportionFACT = PApplet.constrain(lpParsed, 0.01f, 0.99f);
         self.fbTemperatureCTRL.ccSetProportion(mnCTRLProportionFACT);
-        O_TEMP_PORT_TB.setText(String.format("%.2f", mnCTRLProportionFACT));
+        O_TEMP_PROP_TB.setText(String.format("%.2f", mnCTRLProportionFACT));
       }else//..?
         
       //-- temperature ** sampling
@@ -292,7 +307,13 @@ public class CaseSimplePID extends PApplet{
       
       //-- operate pane ** combust lane
       O_OPRT_BFC_SW.addActionListener(O_NOTCH_LISTENER);
+      O_OPRT_BFC_SW.setToolTipText(
+        "heating / controlling is only activated while the fire is on"
+      );
       O_OPRT_BMD_NT.addActionListener(O_NOTCH_LISTENER);
+      O_OPRT_BMD_NT.setToolTipText(
+        "let the system control the damper or manual or not to control at all"
+      );
       ccSetupMomentarySwitch(O_OPRT_BUC_SW);
       ccSetupMomentarySwitch(O_OPRT_BUO_SW);
       JPanel lpCombustLane = ccCreateLane("Combust");
@@ -306,6 +327,10 @@ public class CaseSimplePID extends PApplet{
       ccSetupInputBox(O_OPRT_FXX_TB, 48, 22);
       ccSetupMomentarySwitch(O_OPRT_FDD_SW);
       ccSetupMomentarySwitch(O_OPRT_FPP_SW);
+      String lpFluxSwitchInfo =
+        "adjust current aggregate flux by step";
+      O_OPRT_FDD_SW.setToolTipText(lpFluxSwitchInfo);
+      O_OPRT_FPP_SW.setToolTipText(lpFluxSwitchInfo);
       JPanel lpFluxLane = ccCreateLane("Flux");
       lpFluxLane.add(O_OPRT_FDD_SW);
       lpFluxLane.add(O_OPRT_FPP_SW);
@@ -315,6 +340,9 @@ public class CaseSimplePID extends PApplet{
       
       //-- operate pane ** cooling lane
       O_OPRT_MVR_NT.addActionListener(O_NOTCH_LISTENER);
+      O_OPRT_MVR_NT.setToolTipText(
+        "auto means automatically open when actual value is higher than limit"
+      );
       ccSetupInputBox(O_OPRT_MVL_TB, 48, 22);
       JPanel lpCoolingLane = ccCreateLane("Cooling");
       lpCoolingLane.add(O_OPRT_MVR_NT);
@@ -330,23 +358,38 @@ public class CaseSimplePID extends PApplet{
       
       //-- setting pane ** target lane
       ccSetupInputBox(O_TEMP_TARGET_TB, 64, 22);
+      O_TEMP_TARGET_TB.setToolTipText(
+        "degree is controlled based on this value(cause an entire reset)."
+      );
       JPanel lpTargetLane = ccCreateLane("Target");
       lpTargetLane.add(new JLabel("value[`C]:"));
       lpTargetLane.add(O_TEMP_TARGET_TB);
       
       //-- setting pane ** range lane
-      ccSetupInputBox(O_TEMP_PORT_TB, 48, 22);
+      ccSetupInputBox(O_TEMP_PROP_TB, 48, 22);
+      O_TEMP_PROP_TB.setToolTipText(
+        "target degree is mapped based on this value"
+      );
       ccSetupInputBox(O_TEMP_DEAD_TB, 48, 22);
+      O_TEMP_DEAD_TB.setToolTipText(
+        "deviation is ignored under a range based on this value"
+      );
       JPanel lpRangeLane = ccCreateLane("Range");
-      lpRangeLane.add(new JLabel("proportion[?]:"));
-      lpRangeLane.add(O_TEMP_PORT_TB);
+      lpRangeLane.add(new JLabel("proportion[x]:"));
+      lpRangeLane.add(O_TEMP_PROP_TB);
       lpRangeLane.add(new JSeparator(JSeparator.VERTICAL));
-      lpRangeLane.add(new JLabel("dead[?]:"));
+      lpRangeLane.add(new JLabel("dead[x]:"));
       lpRangeLane.add(O_TEMP_DEAD_TB);
       
       //-- setting pane ** adjust lane
       ccSetupInputBox(O_TEMP_SAMP_TB, 48, 22);
+      O_TEMP_SAMP_TB.setToolTipText(
+        "interval time of sampling action for inner reference value"
+      );
       ccSetupInputBox(O_TEMP_ADJT_TB, 48, 22);
+      O_TEMP_ADJT_TB.setToolTipText(
+        "inverval time of adjusting action for inner target shifting"
+      );
       JPanel lpAdjustLane = ccCreateLane("Adjust");
       lpAdjustLane.add(new JLabel("sampling[s]:"));
       lpAdjustLane.add(O_TEMP_SAMP_TB);
@@ -375,6 +418,7 @@ public class CaseSimplePID extends PApplet{
       lpContentPane.add("Info", lpInfoPane);
       
       //-- frame
+      O_FRAME.setTitle(self.getClass().getName());
       O_FRAME.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
       O_FRAME.getContentPane().add(lpContentPane);
       O_FRAME.setPreferredSize(new Dimension(320, 240));
@@ -391,7 +435,7 @@ public class CaseSimplePID extends PApplet{
       O_OPRT_MVL_TB.setText(String.format("%03.1f", mnCooldownTemperature));
       O_TEMP_TARGET_TB.setText(String.format("%03.1f", mnCTRLTargetCELC));
       O_TEMP_DEAD_TB.setText(String.format("%.2f", mnCTRLDeadFACT));
-      O_TEMP_PORT_TB.setText(String.format("%.2f", mnCTRLProportionFACT));
+      O_TEMP_PROP_TB.setText(String.format("%.2f", mnCTRLProportionFACT));
       O_TEMP_SAMP_TB.setText(String.format("%.2f", mnCTRLSamplingSEC));
       O_TEMP_ADJT_TB.setText(String.format("%.2f", mnCTRLAdjustSEC));
       
@@ -507,7 +551,7 @@ public class CaseSimplePID extends PApplet{
     size(320,240);
     noSmooth();
     self=this;
-    frame.setTitle(CaseSimplePID.class.getName());
+    frame.setTitle(self.getClass().getName());
     frame.addWindowListener(cmSkechClosing);
     
     //-- replace setting
@@ -1109,7 +1153,7 @@ public class CaseSimplePID extends PApplet{
       cmHistoryHead++;cmHistoryHead&=0x07;
       
       //-- fulfilling
-      if(cmHistoryHead==7){cmHistoryAllFilled=true;}
+      if(cmHistoryHead>7){cmHistoryAllFilled=true;}
       
       //-- average calculation
       if(cmHistoryAllFilled){
