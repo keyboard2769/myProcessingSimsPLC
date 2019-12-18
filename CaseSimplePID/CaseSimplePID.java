@@ -1,5 +1,21 @@
-/*
- * Simple PID (raw)
+/* *
+ * Burner and Dryer
+ * 
+ * a fire-blasting blower, aka the burner, 
+ *   heats and dries some aggregates sent to a rolling barrel, aka the dryer.
+ *
+ * the burner has :
+ *  - a ignitor turns its fire on or off. 
+ *  - a controllable air damper restrict the power of fire. 
+ *  - a varistor measured in percentage indicated as degree of the damper. 
+ * 
+ * the dryer has :
+ *  - a temperature sensor indicates how hot the dryer barrel currently is. 
+ *  - a flux scaler in scaler indicates how may aggregate is sent. 
+ *  - a cooling damper drains atomsphere air into the dryer barrel on occasion.
+ *
+ * other control descriptions can be found inside the dialog window.
+ * to exit, press the 'q' key.
  *
  */
 
@@ -42,6 +58,14 @@ public class CaseSimplePID extends PApplet{
   
   //=== swing
   
+  //-- swing ** info message
+  static final String[] C_DES_MESSAGE = new String[]{
+    //[head]:: fill this!
+    "uno\n",
+    "dos\n",
+    "tre!\n"
+  };
+  
   //-- swing ** top
   static final JFrame O_FRAME = new JFrame(CaseSimplePID.class.getName());
   
@@ -50,15 +74,19 @@ public class CaseSimplePID extends PApplet{
   static final JButton           O_OPRT_BUC_SW = new JButton("-");
   static final JButton           O_OPRT_BUO_SW = new JButton("+");
   static final JComboBox<String> O_OPRT_BMD_NT = new JComboBox<>(new String[]{
+    //[head]:: rotate this!
     "AUTO","DISAB","MANUAL"
   });
+  
   //-- swing ** operation ** flux
   static final JButton    O_OPRT_FDD_SW = new JButton("DEC");
   static final JButton    O_OPRT_FPP_SW = new JButton("INC");
   static final JTextField O_OPRT_FXX_TB = new JTextField("000.0");
+  
   //-- swing ** operation ** cooling
   static final JTextField        O_OPRT_MVL_TB = new JTextField("000.0");
   static final JComboBox<String> O_OPRT_MVR_NT = new JComboBox<>(new String[]{
+    //[head]:: rotate this!
     "DISAB","AUTO","FORCE"
   });
   
@@ -69,27 +97,28 @@ public class CaseSimplePID extends PApplet{
   static final JTextField O_TEMP_SAMP_TB   = new JTextField("000.0");
   static final JTextField O_TEMP_ADJT_TB   = new JTextField("000.0");
   
-  //-- swing ** degree controller
-  
   //=== pipe
   
+  //-- pipe ** flags
   static volatile boolean mnBurnerManualCloseFLG  = false;
   static volatile boolean mnBurnerManualOpenFLG   = false;
-  static volatile boolean mnBurnerAutoFLG         = false;
+  static volatile boolean mnBurnerAutoFLG         = true;
   static volatile boolean mnBurnerManualFLG       = false;
   static volatile boolean mnBurnerFireFLG         = false;
   static volatile boolean mnCoolingDamperAutoFLG  = false;
   static volatile boolean mnCoolingDamperForceFLG = false;
   
+  //-- pipe ** values ** operating
   static volatile float mnFluxAdjustWidth     =  20.0f;
   static volatile float mnFluxTPH             =   0.0f;
   static volatile float mnCooldownTemperature = 200.0f;
   
-  static volatile float mnCTRLTargetCELC     = 160.00f;
+  //-- pipe ** values ** controller
+  static volatile float mnCTRLTargetCELC     = 120.00f;
   static volatile float mnCTRLDeadFACT       =   0.02f;
-  static volatile float mnCTRLProportionFACT =   0.20f;
-  static volatile float mnCTRLSamplingSEC    =    1.0f;
-  static volatile float mnCTRLAdjustSEC      =    1.0f;
+  static volatile float mnCTRLProportionFACT =   0.75f;
+  static volatile float mnCTRLSamplingSEC    =   0.50f;
+  static volatile float mnCTRLAdjustSEC      =  30.00f;
   
   //=== action
   
@@ -223,23 +252,22 @@ public class CaseSimplePID extends PApplet{
       //-- temperature ** sampling
       if(lpSource.equals(O_TEMP_SAMP_TB)){
         String lpInput = ccGetStringByInputBox(
-          "[00.01 ~ 59.99]", O_TEMP_SAMP_TB.getText()
+          "[00.50 ~ 59.99]", O_TEMP_SAMP_TB.getText()
         );if(lpInput==null){return;}
         float lpParsed = ccToFloat(lpInput);
-        mnCTRLSamplingSEC = PApplet.constrain(lpParsed, 0.01f, 59.99f);
-        //[head]:: fill this !!
-        System.err.println("O_INPUT_BOX_LISTENER::O_TEMP_SAMP_TB $ not yet");
+        mnCTRLSamplingSEC = PApplet.constrain(lpParsed, 0.5f, 59.99f);
+        self.fbSamplingClockTimer.ccSetTimer(ccToFrameCount(mnCTRLSamplingSEC));
         O_TEMP_SAMP_TB.setText(String.format("%.2f", mnCTRLSamplingSEC));
       }else//..?
       
       //-- temperature ** adjust
       if(lpSource.equals(O_TEMP_ADJT_TB)){
         String lpInput = ccGetStringByInputBox(
-          "[00.01 ~ 59.99]", O_TEMP_ADJT_TB.getText()
+          "[00.50 ~ 59.99]", O_TEMP_ADJT_TB.getText()
         );if(lpInput==null){return;}
         float lpParsed = ccToFloat(lpInput);
-        mnCTRLAdjustSEC = PApplet.constrain(lpParsed, 0.01f, 59.99f);
-        System.err.println("O_INPUT_BOX_LISTENER::O_TEMP_SAMP_TB $ not yet");
+        mnCTRLAdjustSEC = PApplet.constrain(lpParsed, 0.5f, 59.99f);
+        self.fbAdjustClockTimer.ccSetTimer(ccToFrameCount(mnCTRLAdjustSEC));
         O_TEMP_ADJT_TB.setText(String.format("%.2f", mnCTRLAdjustSEC));
       }else//..?
       
@@ -262,7 +290,6 @@ public class CaseSimplePID extends PApplet{
         System.exit(-1);
       }//..?
       
-      //-- operate pane
       //-- operate pane ** combust lane
       O_OPRT_BFC_SW.addActionListener(O_NOTCH_LISTENER);
       O_OPRT_BMD_NT.addActionListener(O_NOTCH_LISTENER);
@@ -274,6 +301,7 @@ public class CaseSimplePID extends PApplet{
       lpCombustLane.add(O_OPRT_BMD_NT);
       lpCombustLane.add(O_OPRT_BUC_SW);
       lpCombustLane.add(O_OPRT_BUO_SW);
+      
       //-- operate pane ** flux lane
       ccSetupInputBox(O_OPRT_FXX_TB, 48, 22);
       ccSetupMomentarySwitch(O_OPRT_FDD_SW);
@@ -284,6 +312,7 @@ public class CaseSimplePID extends PApplet{
       lpFluxLane.add(new JSeparator(JSeparator.VERTICAL));
       lpFluxLane.add(new JLabel("step[tph]:"));
       lpFluxLane.add(O_OPRT_FXX_TB);
+      
       //-- operate pane ** cooling lane
       O_OPRT_MVR_NT.addActionListener(O_NOTCH_LISTENER);
       ccSetupInputBox(O_OPRT_MVL_TB, 48, 22);
@@ -292,18 +321,19 @@ public class CaseSimplePID extends PApplet{
       lpCoolingLane.add(new JSeparator(JSeparator.VERTICAL));
       lpCoolingLane.add(new JLabel("limit[`C]:"));
       lpCoolingLane.add(O_OPRT_MVL_TB);
+      
       //-- operate pane ** pack
       JPanel lpOperatingPane = new JPanel(new GridLayout(3, 1, 1, 1));
       lpOperatingPane.add(lpCombustLane);
       lpOperatingPane.add(lpFluxLane);
-      lpOperatingPane.add(lpCoolingLane);      
+      lpOperatingPane.add(lpCoolingLane);
       
-      //-- setting pane
       //-- setting pane ** target lane
       ccSetupInputBox(O_TEMP_TARGET_TB, 64, 22);
       JPanel lpTargetLane = ccCreateLane("Target");
       lpTargetLane.add(new JLabel("value[`C]:"));
       lpTargetLane.add(O_TEMP_TARGET_TB);
+      
       //-- setting pane ** range lane
       ccSetupInputBox(O_TEMP_PORT_TB, 48, 22);
       ccSetupInputBox(O_TEMP_DEAD_TB, 48, 22);
@@ -313,6 +343,7 @@ public class CaseSimplePID extends PApplet{
       lpRangeLane.add(new JSeparator(JSeparator.VERTICAL));
       lpRangeLane.add(new JLabel("dead[?]:"));
       lpRangeLane.add(O_TEMP_DEAD_TB);
+      
       //-- setting pane ** adjust lane
       ccSetupInputBox(O_TEMP_SAMP_TB, 48, 22);
       ccSetupInputBox(O_TEMP_ADJT_TB, 48, 22);
@@ -322,6 +353,7 @@ public class CaseSimplePID extends PApplet{
       lpAdjustLane.add(new JSeparator(JSeparator.VERTICAL));
       lpAdjustLane.add(new JLabel("adjusting[s]:"));
       lpAdjustLane.add(O_TEMP_ADJT_TB);
+      
       //-- setting pane ** pack
       JPanel lpSettingPane = new JPanel(new GridLayout(3, 1, 1, 1));
       lpSettingPane.add(lpTargetLane);
@@ -330,11 +362,10 @@ public class CaseSimplePID extends PApplet{
       
       //-- info pane
       JPanel lpInfoPane = new JPanel(new BorderLayout(1, 1));
-      JTextArea lpInfoArea = new JTextArea("=D=");
+      JTextArea lpInfoArea = new JTextArea("How ot use:\n");
       lpInfoArea.setEditable(false);
       lpInfoArea.setEnabled(false);
-      lpInfoArea.append("du you reall yknow?");
-      lpInfoArea.append("maybe not?");
+      for(String it : C_DES_MESSAGE){lpInfoArea.append(it);}
       lpInfoPane.add(new JScrollPane(lpInfoArea));
       
       //-- tab
@@ -445,21 +476,22 @@ public class CaseSimplePID extends PApplet{
   EcElement pbBurnerClosePL   = new EcElement("-");
   EcElement pbBurnerDegreeTB  = new EcElement();
   EcElement pbBurnerOpenPL    = new EcElement("+");
-  EcElement pbBurnerFirePL    = new EcElement(" ");
+  EcElement pbBurnerIgnitorPL = new EcElement(" ");
   EcElement pbDryerICON       = new EcElement();
   EcElement pbDryerDegreeTB   = new EcElement();
   EcElement pbDryerFluxTB     = new EcElement();
   EcElement pbCoolingDamperPL = new EcElement(" ");
   
   //-- emulated
-  ZcFlicker fbSamplingClockTimer = new ZcFlicker(/*later*/8);
-  ZcFlicker fbAdjustClockTimer   = new ZcFlicker(/*later*/48);
+  ZcFlicker fbSamplingClockTimer = new ZcFlicker(8);
+  ZcFlicker fbAdjustClockTimer   = new ZcFlicker(80);
   ZcController fbTemperatureCTRL = new ZcController();
+  ZcController fbDegreeCTRL      = new ZcController();
   
   //-- simulated
   boolean dcBurnerCloseMV     = false;
   boolean dcBurnerOpenMV      = false;
-  boolean dcBurnerOnFire      = false;
+  boolean dcBurnerIgnitorMV   = false;
   boolean dcCoolingDamperMV   = false;
   boolean dcColdAggregateLS   = false;
   float   dcDryerFlux         = 160.0f;
@@ -500,10 +532,10 @@ public class CaseSimplePID extends PApplet{
       lpPotentialW *2 /3;
     pbBurnerICON.cmRegion.setSize(lpPotentialW, lpPotentialH);
     pbBurnerICON.ccFollowV(pbBurnerClosePL, 2);
-    pbBurnerFirePL.cmOnColor = 0xFFEECC99;
-    pbBurnerFirePL.cmRegion.setLocation(
-      ccGetEndX(pbBurnerICON.cmRegion) -pbBurnerFirePL.cmRegion.width -2,
-      ccGetCenterY(pbBurnerICON.cmRegion) -pbBurnerFirePL.cmRegion.height -2
+    pbBurnerIgnitorPL.cmOnColor = 0xFFEECC99;
+    pbBurnerIgnitorPL.cmRegion.setLocation(
+      ccGetEndX(pbBurnerICON.cmRegion) -pbBurnerIgnitorPL.cmRegion.width -2,
+      ccGetCenterY(pbBurnerICON.cmRegion) -pbBurnerIgnitorPL.cmRegion.height -2
     );
     
     //-- local ui ** dryer
@@ -534,10 +566,18 @@ public class CaseSimplePID extends PApplet{
     //-- swing ui
     SwingUtilities.invokeLater(O_SWING_INIT);
     
-    //-- post
+    //-- emulated
+    fbDegreeCTRL.cmRangeMinimum=  0f;
+    fbDegreeCTRL.cmRangeMaximum=100f;
+    fbDegreeCTRL.ccSetDead(0.02f);
+    fbDegreeCTRL.ccSetProportion(0.10f);
     fbTemperatureCTRL.ccSetTargetValue(mnCTRLTargetCELC);
     fbTemperatureCTRL.ccSetDead(mnCTRLDeadFACT);
     fbTemperatureCTRL.ccSetProportion(mnCTRLProportionFACT);
+    fbSamplingClockTimer.ccSetTimer(ccToFrameCount(mnCTRLSamplingSEC));
+    fbAdjustClockTimer.ccSetTimer(ccToFrameCount(mnCTRLAdjustSEC));
+    
+    //-- post
     println(this.getClass().getName()+"::setup_end");
     
   }//++!
@@ -548,31 +588,43 @@ public class CaseSimplePID extends PApplet{
     background(0);
     pbRoller++;pbRoller&=0x0f;
     
-    //-- emulated ** scan
     //-- emulated ** scan ** controller ** clock
     fbSamplingClockTimer.ccRun();
     fbAdjustClockTimer.ccRun();
-    //-- emulated ** scan ** controller ** %main
-    fbTemperatureCTRL.ccRun(
-      simDryerTemperature.cmVal,
-      dcBurnerOnFire & fbSamplingClockTimer.ccGetPulse(),
-      dcBurnerOnFire & fbAdjustClockTimer.ccGetPulse()
+    
+    //-- emulated ** scan ** controller ** temperature
+    fbTemperatureCTRL.ccRun(simDryerTemperature.cmVal,
+      dcBurnerIgnitorMV & fbSamplingClockTimer.ccGetPulse(),
+      dcBurnerIgnitorMV & fbAdjustClockTimer.ccGetPulse()
     );
     
-    //[head]::now waht?
+    //-- emulated ** scan ** controller ** degree
+    fbDegreeCTRL.ccSetTargetValue(constrain(
+      fbTemperatureCTRL.ccGetAnalogOutput()*100f,0f,100f
+    ));
+    fbDegreeCTRL.ccRun(
+      (float)simBurnerDamper.ccToPercentage()
+    );
     
     //-- emulated ** scan ** flag
+    boolean lpBurnerAutoCloseFLG = sel(
+      dcBurnerIgnitorMV,fbDegreeCTRL.ccGetNegativeOutput(),
+      sel(simBurnerDamper.ccToPercentage()<=3,false,true)
+    );
+    boolean lpBurnerAutoOpenFLG = sel(
+      dcBurnerIgnitorMV,fbDegreeCTRL.ccGetPositiveOutput(),false
+    );
     
     //-- emulated ** scan ** output
     dcBurnerCloseMV = gate(
-      mnBurnerAutoFLG, /*later*/false,
+      mnBurnerAutoFLG, lpBurnerAutoCloseFLG,
       mnBurnerManualFLG, mnBurnerManualCloseFLG
     );
     dcBurnerOpenMV = gate(
-      mnBurnerAutoFLG, /*later*/false,
+      mnBurnerAutoFLG, lpBurnerAutoOpenFLG,
       mnBurnerManualFLG, mnBurnerManualOpenFLG
     );
-    dcBurnerOnFire = mnBurnerFireFLG;
+    dcBurnerIgnitorMV = mnBurnerFireFLG;
     dcCoolingDamperMV = sel(
       mnCoolingDamperAutoFLG,
       (simDryerTemperature.cmVal>mnCooldownTemperature),
@@ -583,8 +635,9 @@ public class CaseSimplePID extends PApplet{
     dcColdAggregateLS = (mnFluxTPH>20.0f);
     simBurnerDamper.ccClose(dcBurnerCloseMV);
     simBurnerDamper.ccOpen(dcBurnerOpenMV);
+    
     //-- emulated ** simulate ** real
-    simBurnerTemperature.cmVal=sel(dcBurnerOnFire,
+    simBurnerTemperature.cmVal=sel(dcBurnerIgnitorMV,
       (simBurnerDamper.ccToProportion()+0.02f)*C_TEMP_BURN_MAX,
       C_TEMP_INWD_CON
     );
@@ -604,7 +657,7 @@ public class CaseSimplePID extends PApplet{
     //-- bind
     pbBurnerClosePL.cmActivated=dcBurnerCloseMV;
     pbBurnerOpenPL.cmActivated=dcBurnerOpenMV;
-    pbBurnerFirePL.cmActivated=dcBurnerOnFire&&(pbRoller%6>4);
+    pbBurnerIgnitorPL.cmActivated=dcBurnerIgnitorMV&&(pbRoller%6>4);
     pbCoolingDamperPL.cmActivated=dcCoolingDamperMV;
     pbDryerFluxTB.cmActivated=dcColdAggregateLS;
     
@@ -614,7 +667,7 @@ public class CaseSimplePID extends PApplet{
     
     //-- local ui ** line-inicator
     ccDrawController(fbTemperatureCTRL);
-    ccDrawAsLabel(pbBurnerFirePL);
+    ccDrawAsLabel(pbBurnerIgnitorPL);
     ccDrawAsLabel(pbCoolingDamperPL);
     
     //-- local ui ** active ** burner
@@ -627,8 +680,14 @@ public class CaseSimplePID extends PApplet{
     ccDrawAsValueBox(pbDryerFluxTB, ceil(mnFluxTPH), "tph");
     
     //-- local ui ** active ** controller
-    ccSurroundText(fbTemperatureCTRL.ccToInicator("T-C"), 5, 125);
-    ccSurroundText("BDCTRL\n..this is a dummy\nnot_yet!!", 165, 125);
+    ccSurroundText(
+      fbTemperatureCTRL.ccToInicator("Temperature Controller"),
+      10, 125
+    );
+    ccSurroundText(
+      fbDegreeCTRL.ccToInicator("Degree Controller"),
+      170, 125
+    );
     
     //-- watch
     fill(0xFF66CC66);
@@ -681,17 +740,17 @@ public class CaseSimplePID extends PApplet{
     return ca?a:(cb?b:false);
   }//+++
   
-  boolean ccIsValidString(String pxLine){
+  static final boolean ccIsValidString(String pxLine){
     if(pxLine==null){return false;}
     return !pxLine.isEmpty();
   }//+++
   
-  float ccToSecond(int pxFrameCount){
+  static final float ccToSecond(int pxFrameCount){
     float lpAmplified = ((float)pxFrameCount)*100f/16f;
     int lpCeiled = ceil(lpAmplified);return ((float)(lpCeiled))/100f;
   }//+++
   
-  int ccToFrameCount(float pxSecond){
+  static final int ccToFrameCount(float pxSecond){
     return (int)(pxSecond*16f);
   }//+++
   
@@ -936,6 +995,9 @@ public class CaseSimplePID extends PApplet{
         cmJudge=constrain(pxJudge, 0, pxMax);
       }//..?
     }//++<
+    synchronized final void ccSetTimer(int pxMax){
+      ccSetTimer(pxMax, pxMax);
+    }//++<
     boolean ccIsAt(int pxCount){return cmVal==pxCount;}//++>
     boolean ccIsAbove(int pxCount){return cmVal>=pxCount;}//++>
     boolean ccGetSquare(){return ccIsAbove(cmJudge);}//++>
@@ -979,10 +1041,14 @@ public class CaseSimplePID extends PApplet{
     
     //-- ** **
     
+    void ccRun(float pxProcessVAl){
+      cmAnalogOutput = ccCalculateOutput(pxProcessVAl);
+    }//++~
+    
     void ccRun(float pxProcessVAL, boolean pxSamplingCLK, boolean pxAdjustCLK){
       
       //-- output
-      cmAnalogOutput = ccCalculateOutput();
+      cmAnalogOutput = ccCalculateOutput(cmProcessAverage);
       
       //-- sampling
       if(pxSamplingCLK){
@@ -993,7 +1059,7 @@ public class CaseSimplePID extends PApplet{
       
       //--  adjusting
       boolean lpHistoryCondition = cmHistoryAllFilled
-        && (cmGradientAverage<=cmSamplingDead);
+        && (abs(cmGradientAverage)<=cmSamplingDead);
       boolean lpProcessCondition = (cmAnalogOutput != 0f);
       if(pxAdjustCLK && lpHistoryCondition && lpProcessCondition){
           ccAdjustTarget();
@@ -1007,23 +1073,23 @@ public class CaseSimplePID extends PApplet{
     
     //-- ** **
     
-    float ccCalculateOutput(){
-      if(cmProcessAverage < cmProportionNegative){
+    float ccCalculateOutput(float pxReal){
+      if(pxReal < cmProportionNegative){
         return 1f;
       }else
-      if(cmProcessAverage > cmProportionPositive){
+      if(pxReal > cmProportionPositive){
         return -1f;
       }else
-      if(cmProcessAverage > cmDeadPositive){
+      if(pxReal > cmDeadPositive){
         return -1f * map(
-          cmProcessAverage-cmDeadPositive,
+          pxReal-cmDeadPositive,
           0f,cmProportionPositive-cmDeadPositive,
           0.001f,0.999f
         );
       }else
-      if(cmProcessAverage < cmDeadNegative){
+      if(pxReal < cmDeadNegative){
         return map(
-          cmProcessAverage-cmProportionNegative,
+          pxReal-cmProportionNegative,
           cmDeadNegative-cmProportionNegative,0f,
           0.001f,0.999f
         );
@@ -1051,7 +1117,7 @@ public class CaseSimplePID extends PApplet{
         cmGradientAverage = cmDesGradientHistory[cmHistoryHead];
       }else{
         
-        //-- ** provess
+        //-- ** process
         cmProcessAverage = 0f;
         for(int i=0;i<8;i++){cmProcessAverage += cmDesProcessHistory[i];}
         cmProcessAverage/=8f;
