@@ -49,7 +49,7 @@ void draw(){
     pbCenterX-C_BAR_GAP-C_BAR_WIDTH,pbCenterY
   );
   
-  //-- output ** master
+  //-- output ** slave
   fill(pbSlave.cmVal>0?0xFF22DD22:0xFFDD5555);
   rect(
     pbCenterX+C_BAR_GAP,pbCenterY,
