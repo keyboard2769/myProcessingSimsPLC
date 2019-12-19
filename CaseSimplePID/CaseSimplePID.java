@@ -1104,8 +1104,7 @@ public class CaseSimplePID extends PApplet{
       //--  adjusting
       boolean lpHistoryCondition = cmHistoryAllFilled
         && (abs(cmGradientAverage)<=cmSamplingDead);
-      boolean lpProcessCondition = (cmAnalogOutput != 0f);
-      if(pxAdjustCLK && lpHistoryCondition && lpProcessCondition){
+      if(pxAdjustCLK && lpHistoryCondition){
           ccAdjustTarget();
           ccCalculateDeadRange();
           ccCalculateProportionRange();
@@ -1153,12 +1152,12 @@ public class CaseSimplePID extends PApplet{
       cmHistoryHead++;cmHistoryHead&=0x07;
       
       //-- fulfilling
-      if(cmHistoryHead>7){cmHistoryAllFilled=true;}
+      if(cmHistoryHead>=7){cmHistoryAllFilled=true;}
       
       //-- average calculation
-      if(cmHistoryAllFilled){
-        cmProcessAverage  = cmDesProcessHistory[ cmHistoryHead];
-        cmGradientAverage = cmDesGradientHistory[cmHistoryHead];
+      if(!cmHistoryAllFilled){
+        cmProcessAverage  = cmDesProcessHistory[lpLogicalPrev];
+        cmGradientAverage = cmDesGradientHistory[lpLogicalPrev];
       }else{
         
         //-- ** process
